@@ -1,0 +1,680 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TAP & EARN Bot</title>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.1/firebase-firestore-compat.js"></script>
+    
+    <style>
+        /* ==================== 1. UI & Dark Theme Styles ==================== */
+        :root {
+            --bg-color: #121212; /* Deep Black */
+            --card-color: #1e1e1e; /* Darker Card */
+            --primary-color: #1DB954; /* Spotify Green */
+            --text-color: #ffffff;
+            --accent-color: #FF5722; /* Orange Accent */
+            --border-radius: 12px;
+            --box-shadow: 0 4px 10px rgba(0, 0, 0, 0.5);
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 600px;
+            width: 100%;
+            margin: 0 auto;
+            padding: 20px 15px;
+            flex-grow: 1;
+            padding-bottom: 80px; /* Space for the fixed navbar */
+        }
+
+        .card {
+            background-color: var(--card-color);
+            padding: 20px;
+            border-radius: var(--border-radius);
+            margin-bottom: 15px;
+            box-shadow: var(--box-shadow);
+        }
+        
+        /* Buttons and Inputs */
+        button {
+            background-color: var(--primary-color);
+            color: var(--bg-color);
+            border: none;
+            padding: 10px 15px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: background-color 0.3s, transform 0.1s;
+        }
+
+        button:hover {
+            background-color: #159a44;
+        }
+
+        button:active {
+            transform: scale(0.98);
+        }
+
+        input[type="text"], input[type="number"] {
+            width: 100%;
+            padding: 12px;
+            margin: 8px 0 15px 0;
+            border: 1px solid #333;
+            border-radius: 8px;
+            background-color: #2a2a2a;
+            color: var(--text-color);
+            box-sizing: border-box;
+        }
+
+        /* Navigation (Tabs) */
+        .navbar {
+            display: flex;
+            justify-content: space-around;
+            background-color: #1f1f1f;
+            padding: 5px 0;
+            position: fixed;
+            bottom: 0;
+            width: 100%;
+            max-width: 600px;
+            left: 50%;
+            transform: translateX(-50%);
+            box-shadow: 0 -4px 15px rgba(0, 0, 0, 0.6);
+            z-index: 100;
+        }
+
+        .nav-item {
+            color: #888;
+            text-decoration: none;
+            padding: 10px;
+            border-radius: 8px;
+            text-align: center;
+            flex-grow: 1;
+            transition: color 0.3s, background-color 0.3s;
+            font-size: 14px;
+        }
+
+        .nav-item.active {
+            color: var(--primary-color);
+        }
+
+        /* Section Display */
+        .screen {
+            display: none;
+        }
+
+        .screen.active {
+            display: block;
+        }
+
+        /* ==================== 2. Tap & Earn Styles & Animation ==================== */
+        #tap-area {
+            text-align: center;
+            padding: 40px 20px;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        #usdt-image {
+            width: 120px;
+            height: 120px;
+            filter: drop-shadow(0 0 10px var(--primary-color));
+            /* Zoom In/Out Bouncing Animation */
+            animation: bounce 1.8s infinite ease-in-out alternate;
+            transition: transform 0.1s;
+        }
+        
+        #usdt-image:active {
+            transform: scale(0.95);
+        }
+
+        @keyframes bounce {
+            0% { transform: scale(1) translateY(0); }
+            50% { transform: scale(1.05) translateY(-15px); }
+            100% { transform: scale(1) translateY(0); }
+        }
+
+        .coin-credit-animation {
+            position: absolute;
+            font-size: 28px;
+            font-weight: bold;
+            color: gold;
+            text-shadow: 0 0 5px #000;
+            opacity: 0;
+            pointer-events: none;
+            /* Fly Up Animation */
+            animation: flyup 0.8s ease-out forwards;
+        }
+
+        @keyframes flyup {
+            0% { transform: translateY(0); opacity: 1; }
+            100% { transform: translateY(-70px); opacity: 0; filter: blur(2px); }
+        }
+
+        /* Task Item Style */
+        .task-item {
+            display: flex;
+            flex-direction: column;
+            padding: 15px;
+            border-bottom: 1px solid #333;
+        }
+        .task-item-controls {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 10px;
+        }
+        .task-item span {
+            font-size: 1.1em;
+            font-weight: 500;
+        }
+    </style>
+</head>
+<body>
+
+    <script>
+        // **IMPORTANT**: REPLACE WITH YOUR ACTUAL FIREBASE CONFIGURATION
+        const firebaseConfig = {
+  apiKey: "AIzaSyAUJeUEM6vB80iNOmCUnxc7izUBOWwHLeE",
+  authDomain: "tg-bot-6de8a.firebaseapp.com",
+  projectId: "tg-bot-6de8a",
+  storageBucket: "tg-bot-6de8a.firebasestorage.app",
+  messagingSenderId: "940005285529",
+  appId: "1:940005285529:web:ca6241eef838d99c392208"
+};
+
+        // 1. Initialize Firebase
+        const app = firebase.initializeApp(firebaseConfig);
+        const auth = app.auth();
+        const db = app.firestore();
+        let userRef; 
+        let userCoins = 0;
+        let userLevel = 1;
+        let userId = null;
+        
+        const ADMIN_UID = "YOUR_ADMIN_UID_HERE"; // **REPLACE WITH ADMIN UID**
+        const isTelegramWebApp = window.Telegram && window.Telegram.WebApp;
+
+        // 2. Data Synchronization (Local Storage First)
+        function saveDataToLocalStorage() {
+            const data = { coins: userCoins, level: userLevel };
+            localStorage.setItem('userData_' + userId, JSON.stringify(data));
+        }
+
+        function loadUserDataFromLocalStorage() {
+            try {
+                const localData = JSON.parse(localStorage.getItem('userData_' + userId));
+                if (localData) {
+                    userCoins = localData.coins || 0;
+                    userLevel = localData.level || 1;
+                    return true;
+                }
+            } catch (e) { console.warn("Local storage error:", e); }
+            return false;
+        }
+
+        // 3. Update all coin/level displays on the UI
+        function updateUIDisplays() {
+            document.getElementById('coin-display').textContent = userCoins.toLocaleString();
+            document.getElementById('profile-coin-display').textContent = userCoins.toLocaleString();
+            document.getElementById('withdraw-coin-count').textContent = userCoins.toLocaleString();
+            document.getElementById('level-display').textContent = userLevel;
+            document.getElementById('profile-level-display').textContent = userLevel;
+            document.getElementById('uid-display').textContent = userId || 'N/A';
+            
+            // Update Telegram WebApp back button (optional)
+            if (isTelegramWebApp) {
+                 window.Telegram.WebApp.setHeaderColor('#1e1e1e');
+            }
+        }
+        
+        // 4. Core function to update coins and level
+        function updateCoins(amount, source = 'tap') {
+            userCoins += amount;
+            
+            // Level Up Logic: Level increases every 1000 coins
+            const newLevel = Math.floor(userCoins / 1000) + 1;
+            if (newLevel > userLevel) {
+                userLevel = newLevel;
+                // Use Telegram WebApp's haptic feedback
+                if (isTelegramWebApp) { window.Telegram.WebApp.HapticFeedback.notificationOccurred('success'); }
+                alert(`🎉 Level Up! You are now Level ${userLevel}!`);
+            }
+
+            // Sync to Firebase (and then LocalStorage via listener)
+            userRef.update({
+                coins: userCoins,
+                level: userLevel,
+                lastActivity: firebase.firestore.FieldValue.serverTimestamp()
+            }).then(() => {
+                // If update is successful, save locally immediately
+                saveDataToLocalStorage(); 
+                updateUIDisplays();
+            }).catch(e => {
+                console.error("Failed to sync coins to Firebase:", e);
+                // Revert client-side coins if Firebase sync fails
+                userCoins -= amount; 
+                alert("⚠️ Error syncing coins. Check connection.");
+            });
+        }
+        
+        // 5. Firebase Listener for real-time data sync
+        function setupCoinListener() {
+            userRef.onSnapshot(doc => {
+                if (doc.exists) {
+                    const data = doc.data();
+                    // Only update if Firebase data is newer/different
+                    if (data.coins !== userCoins || data.level !== userLevel) {
+                        userCoins = data.coins || 0;
+                        userLevel = data.level || 1;
+                        saveDataToLocalStorage();
+                        updateUIDisplays();
+                        console.log("Data synced from Firebase.");
+                    }
+                }
+            }, error => {
+                console.error("Coin real-time listener failed:", error);
+            });
+        }
+        
+        // 6. Telegram WebApp Data Fetch
+        function initTelegramWebApp() {
+            const tg = window.Telegram.WebApp;
+            const user = tg.initDataUnsafe.user;
+            
+            if (user) {
+                const tgId = user.id || 'N/A';
+                const tgUsername = user.username || 'N/A';
+                
+                document.getElementById('telegram-id-display').textContent = tgId;
+                document.getElementById('telegram-username-display').textContent = tgUsername;
+                document.getElementById('profile-photo').src = `https://t.me/${tgUsername}/photo`; // Simple mock link
+                
+                // Update Telegram data in Firestore on login
+                if (userRef) {
+                    userRef.update({
+                        telegramId: tgId,
+                        username: tgUsername,
+                        firstName: user.first_name || '',
+                        lastName: user.last_name || ''
+                    }).catch(e => console.error("Failed to update TG data:", e));
+                }
+            }
+            tg.ready(); // Signal that the WebApp is ready
+        }
+        
+        // 7. Initial App Load and Auth
+        auth.onAuthStateChanged(user => {
+            if (user) {
+                userId = user.uid;
+                userRef = db.collection('users').doc(userId);
+
+                // Try to load from LocalStorage first
+                if (!loadUserDataFromLocalStorage()) {
+                    // Fallback: Fetch from Firebase and initialize if new
+                    userRef.get().then(doc => {
+                        if (doc.exists) {
+                            const data = doc.data();
+                            userCoins = data.coins || 0;
+                            userLevel = data.level || 1;
+                        } else {
+                            // New user initialization
+                            userRef.set({
+                                uid: userId,
+                                coins: 0,
+                                level: 1,
+                                createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                            });
+                        }
+                        saveDataToLocalStorage();
+                        updateUIDisplays();
+                    }).catch(e => console.error("Firebase fetch error:", e));
+                }
+                
+                // Initialize Telegram data and listeners
+                if (isTelegramWebApp) { initTelegramWebApp(); }
+                setupCoinListener();
+                setupWithdrawalListener();
+                fetchTasks(); // Load tasks from Admin
+                fetchConversionRate(); // Load settings
+
+                // Show app content
+                document.getElementById('loading-screen').classList.remove('active');
+                document.getElementById('tap-earn-screen').classList.add('active');
+                
+                // Admin Mode Check (Insecure client-side check for browser view)
+                if (!isTelegramWebApp && userId === ADMIN_UID) {
+                     document.getElementById('admin-header').style.display = 'block';
+                     document.getElementById('main-app-container').style.display = 'none';
+                     // You would redirect to a proper admin view here.
+                }
+                
+            } else {
+                // Anonymous sign-in for simplicity
+                auth.signInAnonymously().catch(error => {
+                    console.error("Authentication failed:", error);
+                    alert("Authentication failed. Check your Firebase config. 🚀");
+                });
+            }
+        });
+    </script>
+
+    <div id="admin-header" style="display:none; text-align: center; background: #FF5722; padding: 15px; color: white;">
+        <h2>🛠️ ADMIN MODE (INSECURE MOCK) 🛠️</h2>
+        <p>This is where your secure admin UI would go. Users should not see this.</p>
+        <button onclick="alert('Admin task management logic here!')">Manage Tasks</button>
+        <button onclick="alert('Admin withdrawal management logic here!')">Check Withdrawals</button>
+    </div>
+
+    <div class="container" id="main-app-container">
+
+        <div id="loading-screen" class="screen active" style="text-align: center; padding-top: 100px;">
+            <h2>Loading TAP & EARN...</h2>
+            <p>Initializing secure connection. Please wait. ⚡</p>
+        </div>
+
+        <div id="tap-earn-screen" class="screen">
+            <h1 style="text-align: center; color: var(--primary-color);">TAP & EARN 👆</h1>
+            <div class="card" style="text-align: center;">
+                <h3>Coins: <span id="coin-display">0</span> 🪙</h3>
+                <h3>Level: <span id="level-display">1</span> ⭐</h3>
+            </div>
+            <div class="card" id="tap-area">
+                <img id="usdt-image" src="https://upload.wikimedia.org/wikipedia/commons/thumb/e/e0/Tether_USDT_logo.svg/1200px-Tether_USDT_logo.svg.png" alt="USDT Coin">
+                <p style="font-size: 1.2em; font-weight: 600;">Tap the coin to earn!</p>
+            </div>
+        </div>
+
+        <div id="tasks-screen" class="screen">
+            <h2>Tasks & Rewards 🎯</h2>
+            
+            <div class="card">
+                <h3>Refer and Earn 🤝</h3>
+                <p>Invite friends! Get 500 coins per successful referral.</p>
+                <input type="text" id="referral-link" readonly value="Generating unique link..." onclick="this.select(); navigator.clipboard.writeText(this.value);">
+                <button onclick="copyReferralLink()">Copy Referral Link 🔗</button>
+            </div>
+
+            <div class="card">
+                <h3>Daily Tasks</h3>
+                <div id="tasks-list">
+                    <div class="task-item">
+                        <span>Watch Sponsor Ad (Monotag Mock)</span>
+                        <div class="task-item-controls">
+                            <small>Reward: +100 Coins</small>
+                            <button onclick="watchAd()">Watch & Earn 📺</button>
+                        </div>
+                    </div>
+                    <div class="task-item">
+                        <span>Join Our Telegram Channel</span>
+                        <div class="task-item-controls">
+                            <a href="00" style="margin-right: 10px;"><button style="background: #0088cc;">Join Now</button></a>
+                            <button onclick="verifyJoin('channel_task_1')">Verify ✅ (+200)</button>
+                        </div>
+                    </div>
+                    </div>
+            </div>
+        </div>
+
+        <div id="withdrawal-screen" class="screen">
+            <h2>Withdraw Coins 💸</h2>
+            <div class="card">
+                <p>Rate: <strong><span id="rate-display">10,000</span> Coins = 1 USDT</strong></p>
+                <p>Your Coins: <strong id="withdraw-coin-count">0</strong></p>
+                
+                <label for="withdraw-amount">Coins to Withdraw:</label>
+                <input type="number" id="withdraw-amount" placeholder="e.g., 10000" min="10000">
+                
+                <label for="usdt-address">USDT (TRC-20) Wallet Address:</label>
+                <input type="text" id="usdt-address" placeholder="Enter your valid wallet address">
+                
+                <button onclick="submitWithdrawal()">Submit Withdrawal Request</button>
+            </div>
+
+            <div class="card">
+                <h3>Withdrawal History</h3>
+                <div id="withdrawal-history">
+                    <p style="text-align: center; color: #aaa;">Loading history...</p>
+                </div>
+            </div>
+        </div>
+
+        <div id="profile-screen" class="screen">
+            <h2>Your Profile 👤</h2>
+            <div class="card" style="text-align: center;">
+                <img id="profile-photo" src="https://via.placeholder.com/100/1DB954/FFFFFF?text=TG" alt="Profile Photo" style="border-radius: 50%; width: 100px; height: 100px; object-fit: cover; margin-bottom: 10px; border: 3px solid var(--primary-color);">
+                
+                <p style="font-size: 1.2em; margin-bottom: 5px;">Username: <strong><span id="telegram-username-display">N/A</span></strong></p>
+                <p style="font-size: 0.9em; color: #aaa;">Telegram ID: <span id="telegram-id-display">N/A</span></p>
+                
+                <hr style="border-color: #333; margin: 15px 0;">
+                
+                <p>Current Coins: <strong><span id="profile-coin-display">0</span> 🪙</strong></p>
+                <p>Current Level: <strong><span id="profile-level-display">1</span> ⭐</strong></p>
+                <p style="font-size: 0.8em; color: #555;">UID (Firebase): <span id="uid-display">Loading...</span></p>
+            </div>
+            <div class="card">
+                <h3>Account</h3>
+                <button onclick="logoutUser()" style="background-color: var(--accent-color);">Logout / Change Account</button>
+            </div>
+        </div>
+    </div>
+    
+    <div class="navbar">
+        <a href="#" class="nav-item active" data-screen="tap-earn-screen">✨ Tap</a>
+        <a href="#" class="nav-item" data-screen="tasks-screen">🎯 Tasks</a>
+        <a href="#" class="nav-item" data-screen="withdrawal-screen">💸 Withdraw</a>
+        <a href="#" class="nav-item" data-screen="profile-screen">👤 Profile</a>
+    </div>
+
+    <script>
+        // ==================== 8. TAP & EARN LOGIC ====================
+        document.getElementById('tap-area').addEventListener('click', function(e) {
+            const creditAmount = 1;
+            updateCoins(creditAmount, 'tap');
+
+            // Coin credit animation (Visual feedback)
+            const coinAnim = document.createElement('div');
+            coinAnim.textContent = `+${creditAmount}`;
+            coinAnim.classList.add('coin-credit-animation');
+            
+const rect = this.getBoundingClientRect();
+            // Position animation near the click event
+            coinAnim.style.left = e.clientX - rect.left + 'px';
+            coinAnim.style.top = e.clientY - rect.top + 'px';
+            
+            this.appendChild(coinAnim);
+
+            coinAnim.addEventListener('animationend', () => {
+                coinAnim.remove();
+            });
+        });
+
+        // ==================== 9. TASKS LOGIC ====================
+        
+        let conversionRate = 10000; // Default
+
+        function copyReferralLink() {
+            // Generates a mock link with the user's UID for tracking
+            const referralLink = `https://tap-and-earn.com/?ref=${userId}`;
+            document.getElementById('referral-link').value = referralLink;
+            
+            navigator.clipboard.writeText(referralLink).then(() => {
+                alert("🔗 Referral link copied! Earn 500 coins per friend.");
+            });
+        }
+
+        function watchAd() {
+            // MOCK: Simulate ad completion
+            alert("📺 Ad is playing for 5 seconds...");
+            setTimeout(() => {
+                updateCoins(100, 'ad'); 
+                alert("✅ 100 Coins credited for watching the ad!");
+            }, 3000); 
+        }
+
+        // **INSECURE MOCK VERIFICATION**
+        function verifyJoin(taskId) {
+            // ⚠️ WARNING: Real verification requires a backend to securely check Telegram API.
+            alert("Checking Telegram membership status... (Insecure Mock)");
+            
+            setTimeout(() => {
+                if (Math.random() > 0.3) { // 70% chance of success mock
+                    updateCoins(200, taskId); 
+                    alert("✅ Verification success! 200 Coins credited.");
+                } else {
+                    alert("❌ Verification failed. Ensure you have joined the channel.");
+                }
+            }, 1500); 
+        }
+        
+        // Fetch tasks dynamically from Firebase (Admin Panel output)
+        function fetchTasks() {
+            // This is a simple Firestore read
+            db.collection('tasks').orderBy('reward', 'desc').get().then(snapshot => {
+                const listDiv = document.getElementById('tasks-list');
+                listDiv.innerHTML = ''; // Clear mock tasks
+
+                snapshot.forEach(doc => {
+                    const task = doc.data();
+                    const item = document.createElement('div');
+                    item.classList.add('task-item');
+                    item.innerHTML = `
+                        <span>${task.name}</span>
+                        <div class="task-item-controls">
+                            <small>Reward: +${task.reward} Coins</small>
+                            <a href="${task.link}" target="_blank" style="text-decoration: none;">
+                                <button style="background: ${task.type === 'link' ? '#00bcd4' : '#ffc107'};">${task.buttonText}</button>
+                            </a>
+                            ${task.type === 'telegram_join' ? `<button onclick="verifyJoin('${doc.id}')" style="margin-left: 5px;">Verify ✅</button>` : ''}
+                        </div>
+                    `;
+                    listDiv.appendChild(item);
+                });
+            }).catch(e => console.error("Error fetching tasks:", e));
+        }
+
+        // ==================== 10. WITHDRAWAL LOGIC ====================
+        function fetchConversionRate() {
+            db.collection('settings').doc('conversionRate').get().then(doc => {
+                if (doc.exists) {
+                    conversionRate = doc.data().coinsPerUsdt || 10000;
+                    document.getElementById('rate-display').textContent = conversionRate.toLocaleString();
+                }
+            }).catch(e => console.error("Error fetching rate:", e));
+        }
+
+        function submitWithdrawal() {
+            const amount = parseInt(document.getElementById('withdraw-amount').value);
+            const usdtAddress = document.getElementById('usdt-address').value.trim();
+            
+            if (!amount || amount < conversionRate || amount % conversionRate !== 0) {
+                alert(`Minimum withdrawal is ${conversionRate.toLocaleString()} coins and must be in multiples.`);
+                return;
+            }
+
+            if (userCoins < amount) {
+                alert("You don't have enough coins for this withdrawal.");
+                return;
+            }
+
+            if (usdtAddress.length < 20) { 
+                alert("Please enter a valid USDT wallet address.");
+                return;
+            }
+
+            const usdtValue = amount / conversionRate;
+
+            db.collection('withdrawals').add({
+                userId: userId,
+                username: document.getElementById('telegram-username-display').textContent || 'Anonymous',
+                coins: amount,
+                usdtValue: usdtValue,
+                usdtAddress: usdtAddress,
+                status: 'Pending', 
+                requestedAt: firebase.firestore.FieldValue.serverTimestamp()
+            }).then(() => {
+                // Deduct coins optimistically
+                updateCoins(-amount, 'withdrawal');
+                
+                alert(`💸 Request for ${amount} coins (${usdtValue} USDT) submitted! Status: Pending.`);
+                document.getElementById('withdraw-amount').value = '';
+                document.getElementById('usdt-address').value = '';
+            }).catch(e => {
+                console.error("Withdrawal submission failed:", e);
+                alert("Error submitting request. Try again.");
+            });
+        }
+
+        function setupWithdrawalListener() {
+             db.collection('withdrawals')
+                .where('userId', '==', userId)
+                .orderBy('requestedAt', 'desc')
+                .onSnapshot(snapshot => {
+                    const historyDiv = document.getElementById('withdrawal-history');
+                    historyDiv.innerHTML = '';
+                    
+                    if (snapshot.empty) {
+                        historyDiv.innerHTML = '<p style="text-align: center; color: #aaa;">No requests yet.</p>';
+                        return;
+                    }
+
+                    snapshot.forEach(doc => {
+                        const data = doc.data();
+                        const statusColors = { 'Pending': '#ffc107', 'Approved': '#1DB954', 'Rejected': '#FF5722' };
+                        
+                        const item = document.createElement('div');
+                        item.classList.add('card');
+                        item.style.marginBottom = '10px';
+                        item.innerHTML = `
+                            <p style="margin: 0;"><strong>Coins:</strong> ${data.coins.toLocaleString()} (${data.usdtValue} USDT)</p>
+                            <p style="margin: 5px 0;"><strong>Address:</strong> ${data.usdtAddress.substring(0, 6)}...${data.usdtAddress.slice(-6)}</p>
+                            <p style="margin: 0;"><strong>Status:</strong> <span style="color: ${statusColors[data.status] || 'white'}; font-weight: bold;">${data.status}</span></p>
+                            <p style="font-size: 0.8em; color: #777;">${data.requestedAt ? new Date(data.requestedAt.toDate()).toLocaleString() : 'N/A'}</p>
+                        `;
+                        historyDiv.appendChild(item);
+                    });
+                }, error => {
+                    console.error("Withdrawal history listener failed:", error);
+                });
+        }
+        
+        // ==================== 11. NAVIGATION & LOGOUT ====================
+        document.querySelectorAll('.nav-item').forEach(item => {
+            item.addEventListener('click', function(e) {
+                e.preventDefault();
+                const targetScreenId = this.getAttribute('data-screen');
+
+                document.querySelectorAll('.nav-item').forEach(nav => nav.classList.remove('active'));
+                this.classList.add('active');
+
+                document.querySelectorAll('.screen').forEach(screen => screen.classList.remove('active'));
+                document.getElementById(targetScreenId).classList.add('active');
+            });
+        });
+
+        function logoutUser() {
+            auth.signOut().then(() => {
+                alert("Logged out successfully. Reloading...");
+                localStorage.removeItem('userData_' + userId);
+                window.location.reload();
+            }).catch(e => {
+                console.error("Logout failed:", e);
+                alert("Logout failed.");
+            });
+        }
+    </script>
+</body>
+</html>
